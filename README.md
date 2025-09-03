@@ -1,1 +1,3 @@
-#ezRAG
+# **ezRAG**
+### ezRAG is a simple web app designed to allow users to upload documents (.txt, .md, and .pdf), and prompt their choice of LLM to answer questions using said documents.
+### Currently the web app is under development, and the current iteration only supports file uploads, and nothing else.
