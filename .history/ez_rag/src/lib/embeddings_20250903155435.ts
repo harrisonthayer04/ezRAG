@@ -1,0 +1,61 @@
+import { pipeline, env } from "@xenova/transformers";
+
+// Configure for offline usage
+env.allowLocalModels = true;
+env.allowRemoteModels = false;
+env.localModelPath = './models/';
+env.cacheDir = './models/';
+
+let extractorPromise: Promise<any> | null = null;
+
+export function loadEmbedder(model = 'bge-small-en-v1.5'){
+    if(!extractorPromise){
+        extractorPromise = pipeline('feature-extraction', model, {
+            quantized: true,
+            local_files_only: true,
+            cache_dir: './models/'
+        }).catch(async (error) => {
+            console.error('Failed to load local model:', error);
+            // Fallback: try to load from remote if local fails
+            console.log('Attempting to download model for offline use...');
+            env.allowRemoteModels = true;
+            const pipeline_remote = await pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', {
+                quantized: true,
+                cache_dir: './models/'
+            });
+            env.allowRemoteModels = false;
+            return pipeline_remote;
+        });
+    }
+    return extractorPromise;
+}
+
+export async function embedOne(text: string): Promise<Float32Array>{
+    const extractor = await loadEmbedder();
+    const out = await extractor(text, {pooling:'mean', normalize:true});
+    return out instanceof Float32Array ? out : new Float32Array(out);
+}
+
+export async function embedMany(texts: string[]): Promise<Float32Array[]> {
+    const extractor = await loadEmbedder();
+    const results: Float32Array[] = [];
+    for (const t of texts){
+        const out = await extractor(t, {pooling:'mean', normalize:true});
+        results.push(out instanceof Float32Array ? out : new Float32Array(out));
+    }
+    return results;
+}
+
+export function cosineSimilarity(a: Float32Array, b: Float32Array): number{
+    let dot = 0;
+    let na = 0;
+    let nb = 0;
+    for (let i = 0; i < a.length; i++){
+        const ai = a[i];
+        const bi = b[i];
+        dot += ai * bi;
+        na += ai * ai;
+        nb += bi * bi;
+    }
+    return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}

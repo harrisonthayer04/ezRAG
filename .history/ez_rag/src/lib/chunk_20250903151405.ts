@@ -1,0 +1,8 @@
+export function chunkByChars(
+    text: string,
+    maxChars = 1800,
+    overlap = 200
+): string[]{
+    const clean = text.replace(/\s+\n/g, '\n').trim();
+    if (clean.length <= maxChars) return [clean]
+}
