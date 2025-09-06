@@ -1,3 +1,3 @@
 # **ezRAG**
-### ezRAG is a simple web app designed to allow users to upload documents (.txt, .md, and .pdf), and prompt their choice of LLM to answer questions using said documents.
-### Currently the web app is under development, and the current iteration only takes .txt and .md files and creates embedding vectors from them. Version 2 will support bring your own OpenRouter API for making LLM calls...
+### ezRAG is a simple web app designed to allow users to upload documents (.txt and .md), and prompt their choice of LLM to answer questions using said documents.
+### Currently the web app is under development, and the current iteration only supports uploading your .md files and .txt files, as well as uploading your openrouter api key and prompting gpt-5 via the openrouter api. A future version (coming soon) will support prompting the model with your own documents!
