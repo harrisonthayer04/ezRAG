@@ -37,6 +37,8 @@ const File_Upload: React.FC = () => {
   const [items, setItems] = useState<StoredFileMetadata[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [maxChars, setMaxChars] = useState(1800);
+  const [overlap, setOverlap] = useState(200);
 
   async function handleUpload() {
     if (!selected || selected.length === 0) return;
@@ -83,7 +85,7 @@ const File_Upload: React.FC = () => {
       const chunks: { fileId: string; chunkIndex: number; text: string }[] = [];
       for (const it of next) {
         if (it.error) continue;
-        const parts = chunkByChars(it.text, 1800, 200); // tune sizes as you like
+        const parts = chunkByChars(it.text, maxChars, overlap); // tune sizes as you like
         parts.forEach((t, i) => {
           chunks.push({ fileId: it.id, chunkIndex: i, text: t });
         });
@@ -155,6 +157,42 @@ const File_Upload: React.FC = () => {
               Clear All Documents
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Chunking parameters */}
+      <div style={{ marginBottom: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #e9ecef' }}>
+        <div style={{ marginBottom: '10px' }}>
+          <label>
+            <strong>Max chars per chunk:</strong> {maxChars}
+            <input
+              type="range"
+              min={200}
+              max={4000}
+              step={100}
+              value={maxChars}
+              onChange={(e) => {
+                const v = parseInt(e.target.value) || 1800;
+                setMaxChars(v);
+                if (overlap >= v) setOverlap(Math.max(0, v - 1));
+              }}
+              style={{ width: '100%', display: 'block', marginTop: '6px' }}
+            />
+          </label>
+        </div>
+        <div>
+          <label>
+            <strong>Overlap:</strong> {overlap}
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, maxChars - 1)}
+              step={50}
+              value={overlap}
+              onChange={(e) => setOverlap(Math.max(0, parseInt(e.target.value) || 0))}
+              style={{ width: '100%', display: 'block', marginTop: '6px' }}
+            />
+          </label>
         </div>
       </div>
 

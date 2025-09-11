@@ -91,4 +91,4 @@ npm start
 - Chat-style interaction and conversation memory
 - Adjustable chunking parameters
 - Hybrid retrieval and re‑ranking
-- On-device persistence (IndexedDB) and optional ANN index
+- New styling

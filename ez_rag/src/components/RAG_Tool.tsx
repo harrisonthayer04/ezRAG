@@ -21,9 +21,8 @@ type RetrievalResult = {
 };
 
 async function retrieveRelevantChunks(
-  question: string, 
-  vectors: VectorRecord[], 
-  topK: number = 5, 
+  question: string,
+  vectors: VectorRecord[],
   minSimilarity: number = 0.3
 ): Promise<RetrievalResult[]> {
   if (vectors.length === 0) {
@@ -39,11 +38,10 @@ async function retrieveRelevantChunks(
     similarity: cosineSimilarity(questionEmbedding, chunk.vector)
   }));
   
-  // Filter by minimum similarity and take top-k
+  // Filter by minimum similarity and sort (do not slice; caller chooses subset)
   return similarities
     .filter(result => result.similarity >= minSimilarity)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, topK);
+    .sort((a, b) => b.similarity - a.similarity);
 }
 
 function buildRAGPrompt(question: string, retrievedChunks: RetrievalResult[]): string {
@@ -67,22 +65,54 @@ QUESTION: ${question}
 Please provide a helpful answer based on the context above. If you reference information from the context, please cite the source using the format [1], [2], etc.`;
 }
 
-async function ask(question: string, vectors: VectorRecord[], topK: number = 5, minSimilarity: number = 0.3) {
+type AskOptions = {
+  topK?: number;
+  minSimilarity?: number;
+  poolSize?: number; // number of candidates to rotate/sample from
+  rotate?: boolean;  // rotate window each ask
+  rotationIndex?: number; // starting offset into pool
+};
+
+async function ask(
+  question: string,
+  vectors: VectorRecord[],
+  options: AskOptions = {}
+) {
+    const {
+      topK = 5,
+      minSimilarity = 0.3,
+      poolSize = Math.max(8, topK),
+      rotate = true,
+      rotationIndex = 0,
+    } = options;
     await loadEmbedder();
     
-    // Retrieve relevant chunks
-    const retrievedChunks = await retrieveRelevantChunks(question, vectors, topK, minSimilarity);
+    // Retrieve and rank candidates (pool)
+    const ranked = await retrieveRelevantChunks(question, vectors, minSimilarity);
+
+    if (ranked.length === 0) {
+        const msg = `I don't have any relevant information in my knowledge base to answer your question: "${question}". Please upload some documents first, or try rephrasing your question.`;
+        return { answer: msg, retrievedChunks: [] as RetrievalResult[], nextRotationIndex: rotationIndex };
+    }
+
+    const pool = ranked.slice(0, Math.max(topK, poolSize));
+
+    // Select a subset from the pool
+    let selected: RetrievalResult[] = [];
+    let nextRotationIndex = rotationIndex;
+    if (rotate && pool.length > 0) {
+        const start = rotationIndex % pool.length;
+        for (let i = 0; i < Math.min(topK, pool.length); i++) {
+            const idx = (start + i) % pool.length;
+            selected.push(pool[idx]);
+        }
+        nextRotationIndex = (start + selected.length) % pool.length;
+    } else {
+        selected = pool.slice(0, topK);
+    }
     
     // Build the RAG prompt
-    const prompt = buildRAGPrompt(question, retrievedChunks);
-    
-    // If no relevant chunks found, return early message
-    if (retrievedChunks.length === 0) {
-        return {
-            answer: prompt,
-            retrievedChunks: []
-        };
-    }
+    const prompt = buildRAGPrompt(question, selected);
     
     const completion = await openai.chat.completions.create({
         model: 'openai/gpt-5',
@@ -98,7 +128,8 @@ async function ask(question: string, vectors: VectorRecord[], topK: number = 5, 
     
     return {
         answer: completion.choices[0].message.content || 'No response generated.',
-        retrievedChunks
+        retrievedChunks: selected,
+        nextRotationIndex
     };
 };
 
@@ -112,6 +143,9 @@ const RAG_Tool = () => {
     const [topK, setTopK] = useState(5);
     const [minSimilarity, setMinSimilarity] = useState(0.3);
     const [showContext, setShowContext] = useState(false);
+    const [poolSize, setPoolSize] = useState(12);
+    const [rotateContext, setRotateContext] = useState(true);
+    const [rotationIndex, setRotationIndex] = useState(0);
     
     const handleAsk = async () => {
         if (!question.trim()) return;
@@ -121,9 +155,18 @@ const RAG_Tool = () => {
         setRetrievedChunks([]);
         
         try {
-            const result = await ask(question, vectors, topK, minSimilarity);
+            const result = await ask(question, vectors, {
+                topK,
+                minSimilarity,
+                poolSize,
+                rotate: rotateContext,
+                rotationIndex,
+            });
             setAnswer(result.answer);
             setRetrievedChunks(result.retrievedChunks);
+            if (typeof result.nextRotationIndex === 'number') {
+                setRotationIndex(result.nextRotationIndex);
+            }
         } catch (error) {
             console.error('Error asking question:', error);
             setAnswer('Sorry, there was an error processing your question. Please try again.');
@@ -181,6 +224,25 @@ const RAG_Tool = () => {
                         onChange={(e) => setMinSimilarity(parseFloat(e.target.value) || 0.3)}
                         style={{ width: '60px', marginLeft: '5px' }}
                     />
+                </label>
+                <label>
+                    Pool size: 
+                    <input 
+                        type="number" 
+                        min={topK}
+                        max={50}
+                        value={poolSize}
+                        onChange={(e) => setPoolSize(Math.max(topK, parseInt(e.target.value) || 12))}
+                        style={{ width: '60px', marginLeft: '5px' }}
+                    />
+                </label>
+                <label>
+                    <input 
+                        type="checkbox" 
+                        checked={rotateContext} 
+                        onChange={(e) => setRotateContext(e.target.checked)}
+                    />
+                    Rotate context each ask
                 </label>
                 <label>
                     <input 
@@ -265,10 +327,7 @@ const RAG_Tool = () => {
                                 (chunk {result.chunk.chunkIndex}, similarity: {result.similarity.toFixed(3)})
                             </div>
                             <div style={{ fontSize: '0.95em', whiteSpace: 'pre-wrap' }}>
-                                {result.chunk.text.length > 300 
-                                    ? result.chunk.text.slice(0, 300) + '...' 
-                                    : result.chunk.text
-                                }
+                                {result.chunk.text}
                             </div>
                         </div>
                     ))}
