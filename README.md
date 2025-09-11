@@ -84,7 +84,7 @@ npm start
   - Verify the API key and that it is saved in the app. Check browser devtools for network errors.
 
 ## Security
-- The API key is stored in `localStorage` and requests are made from the browser. For production, proxy LLM requests through a backend and store secrets server‑side.
+- The API key is stored in `localStorage` and requests are made from the browser.
 
 ## Roadmap
 - Model selector
