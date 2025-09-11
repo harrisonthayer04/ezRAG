@@ -15,7 +15,7 @@ function App() {
         <Open_Router />
 
         <h2>Then, upload your documents.</h2>
-        <h3>You may upload TXT or MD files to build your knowledge base.</h3>
+        <h3>You may upload .TXT, .MD, and .PDF files to build your knowledge base.</h3>
         <File_Upload />
 
         <h2>Once you have uploaded your documents, you can query them using the RAG tool below.</h2>
